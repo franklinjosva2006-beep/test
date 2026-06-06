@@ -107,6 +107,10 @@ st.markdown("""
         background: rgba(168,85,247,0.15); border: 1px solid rgba(168,85,247,0.4);
         color: #A855F7; font-size: 11px; font-weight: 600; margin-left: 8px;
     }
+    .debug-box {
+        background: rgba(100, 50, 150, 0.1); border: 1px solid rgba(168, 85, 247, 0.3);
+        border-radius: 6px; padding: 8px; font-size: 11px; color: #aaa; margin-top: 8px;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -143,11 +147,8 @@ st.markdown("---")
 # ENGINE + SESSION STATE
 # =============================================================================
 
-@st.cache_resource
-def get_engine():
-    return ZeravaneEngine()
-
-engine = get_engine()
+# Don't use cache_resource - create engine directly
+engine = ZeravaneEngine()
 
 if "chat_history" not in st.session_state:
     st.session_state.chat_history = []
@@ -191,6 +192,21 @@ with st.sidebar:
     st.write(f"**ScraperAPI:** {scraper_status}")
     st.write(f"**Groq:** {groq_status}")
     st.write(f"**AI/ML API:** {aiml_status}")
+
+    # Debug section
+    with st.expander("🔍 Debug Info"):
+        st.markdown("<div class='debug-box'>", unsafe_allow_html=True)
+        st.caption("**Detected Secrets:**")
+        st.text(f"Scraper API Key: {'✅ Found' if engine.scraper_api_key else '❌ Not found'}")
+        st.text(f"Groq API Key: {'✅ Found' if engine.groq_api_key else '❌ Not found'}")
+        st.text(f"AI/ML API Key: {'✅ Found' if engine.aiml_api_key else '❌ Not found'}")
+        st.caption("**Instructions:**")
+        st.text("If keys show ❌, go to:")
+        st.text("1. Streamlit Cloud Dashboard")
+        st.text("2. App Settings → Secrets")
+        st.text("3. Add: SCRAPER_API_KEY=your_key")
+        st.text("4. Reboot the app")
+        st.markdown("</div>", unsafe_allow_html=True)
 
     if engine._cached_url:
         st.markdown(f"""
