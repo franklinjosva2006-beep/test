@@ -32,7 +32,7 @@ class ZeravaneEngine:
     SCRAPER_API_BASE = "http://api.scraperapi.com"
     MIN_TEXT_LENGTH = 100
 
-    def __init__(self, chroma_path="./chroma_db"):
+    def __init__(self):
         # ── Get Gemini API key from Streamlit secrets or environment ──
         api_key = self._get_secret("GEMINI_API_KEY") or self._get_secret("GOOGLE_API_KEY")
 
@@ -44,7 +44,7 @@ class ZeravaneEngine:
 
         self.client = genai.Client(api_key=api_key)
         self.model_name = "gemini-2.5-flash"
-        self.chroma_client = chromadb.PersistentClient(path=chroma_path)
+        self.chroma_client = chromadb.EphemeralClient()
 
         # ── Get ScraperAPI credentials ──
         self.scraper_api_key = self._get_secret("SCRAPER_API_KEY", default="")
@@ -341,7 +341,10 @@ class ZeravaneEngine:
 
             owner, repo = match.group(1), match.group(2).rstrip("/")
             api_base = f"https://api.github.com/repos/{owner}/{repo}"
+            github_token = self._get_secret("GITHUB_TOKEN", default="")
             headers = {"Accept": "application/vnd.github.v3+json", "User-Agent": "ZeravaneAI"}
+            if github_token:
+                headers["Authorization"] = f"Bearer {github_token}"
 
             meta_resp = requests.get(api_base, headers=headers, timeout=15)
             metadata = {}
