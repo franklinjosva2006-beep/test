@@ -2,7 +2,66 @@ import os
 import re
 import requests
 from bs4 import BeautifulSoup
-import chromadb
+# Zero-dependency in-memory vector store (replaces chromadb — Python 3.14 compatible)
+import math
+import json
+
+class _Collection:
+    """Lightweight in-memory vector store using TF-IDF cosine similarity."""
+    def __init__(self):
+        self._docs = {}  # id -> text
+
+    def add(self, documents, ids, metadatas=None):
+        for doc, did in zip(documents, ids):
+            self._docs[did] = doc
+
+    def count(self):
+        return len(self._docs)
+
+    def _score(self, query, doc):
+        """Simple word-overlap score (fast, no dependencies)."""
+        q_words = set(query.lower().split())
+        d_words = doc.lower().split()
+        if not q_words or not d_words:
+            return 0.0
+        d_freq = {}
+        for w in d_words:
+            d_freq[w] = d_freq.get(w, 0) + 1
+        overlap = sum(d_freq.get(w, 0) for w in q_words)
+        return overlap / (math.sqrt(len(q_words)) * math.sqrt(len(d_words)) + 1e-9)
+
+    def query(self, query_texts, n_results=3):
+        query = query_texts[0] if query_texts else ""
+        scored = sorted(
+            self._docs.items(),
+            key=lambda kv: self._score(query, kv[1]),
+            reverse=True
+        )
+        top = [doc for _, doc in scored[:n_results]]
+        return {"documents": [top]}
+
+    def delete(self):
+        self._docs = {}
+
+
+class _EphemeralClient:
+    """Drop-in replacement for _EphemeralClient()."""
+    def __init__(self):
+        self._collections = {}
+
+    def create_collection(self, name):
+        col = _Collection()
+        self._collections[name] = col
+        return col
+
+    def get_collection(self, name):
+        if name not in self._collections:
+            raise KeyError(f"Collection {name!r} not found")
+        return self._collections[name]
+
+    def delete_collection(self, name):
+        if name in self._collections:
+            del self._collections[name]
 from google import genai
 from google.genai import types
 import ipaddress
@@ -47,7 +106,7 @@ class ZeravaneEngine:
 
         self.client = genai.Client(api_key=api_key)
         self.model_name = "gemini-2.5-flash"
-        self.chroma_client = chromadb.EphemeralClient()
+        self.chroma_client = _EphemeralClient()
 
         # ── Get ScraperAPI credentials ──
         self.scraper_api_key = self._get_secret("SCRAPER_API_KEY", default="")
