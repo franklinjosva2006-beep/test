@@ -1,13 +1,8 @@
 # =============================================================================
-# CRITICAL PLATFORM PATCHES — must run before all other imports
+# PLATFORM PATCHES — run before everything else
 # =============================================================================
 import os, sys
 os.environ["PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION"] = "python"
-try:
-    __import__("pysqlite3")
-    sys.modules["sqlite3"] = sys.modules.pop("pysqlite3")
-except ImportError:
-    pass
 
 try:
     from dotenv import load_dotenv
@@ -415,11 +410,22 @@ with tab2:
 
             if chunks:
                 with st.spinner("🧠 Querying unified knowledge base..."):
-                    response_text, context_payload, scrape_method, model_used = engine.execute_live_agent_query(
-                        user_query=multi_query,
-                        target_url=None,
-                        force_rescrape=False,
+                    context_payload = engine.query_vector_context(
+                        collection_name="zeravane_multi_url",
+                        query=multi_query,
+                        n_results=5,
                     )
+                    system_instruction = (
+                        "You are ZeravaneAI, a web-aware developer agent with access to "
+                        "content scraped from multiple URLs. Answer the user question using "
+                        "the provided context. Cite source URLs where possible."
+                    )
+                    prompt = (
+                        f"Sources: {', '.join(urls)}\n\n"
+                        f"=== MERGED CONTENT ===\n{context_payload}\n\n"
+                        f"=== QUESTION ===\n{multi_query}"
+                    )
+                    response_text, model_used = engine._infer(system_instruction, prompt)
                 st.markdown("### 🤖 ZeravaneAI Response")
                 st.markdown(
                     f"<small style='color:#555;'>Sources: {len(urls)} URLs merged | "
@@ -485,11 +491,30 @@ with tab3:
 
             if not repo_content.startswith("GitHub_Error") and not repo_content.startswith("Invalid"):
                 with st.spinner("🧠 Analyzing repository and answering your question..."):
-                    response_text, context_payload, scrape_method, model_used = engine.execute_live_agent_query(
-                        user_query=github_query,
-                        target_url=None,
-                        force_rescrape=False,
+                    # Query the github-specific collection that analyze_github_repo() just built
+                    context_payload = engine.query_vector_context(
+                        collection_name="zeravane_github",
+                        query=github_query,
+                        n_results=4,
                     )
+                    # Fall back to raw repo content if vector query returns nothing
+                    if not context_payload:
+                        context_payload = repo_content[:6000]
+
+                    system_instruction = (
+                        "You are ZeravaneAI, a GitHub repository analyst. "
+                        "Answer the user's question using the repository data provided below — "
+                        "README, file tree, metadata, and description. "
+                        "Be specific, cite file names or README sections where relevant, "
+                        "and provide actionable instructions."
+                    )
+                    prompt = (
+                        f"Repository: {github_url_input.strip()}\n\n"
+                        f"=== REPOSITORY DATA ===\n{context_payload}\n\n"
+                        f"=== QUESTION ===\n{github_query}"
+                    )
+                    response_text, model_used = engine._infer(system_instruction, prompt)
+
                 st.markdown("### 🤖 ZeravaneAI Response")
                 st.markdown(
                     f"<small style='color:#555;'>Source: GitHub API | "
