@@ -24,18 +24,30 @@ if not os.environ.get("GEMINI_API_KEY") and os.environ.get("GOOGLE_API_KEY"):
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 from backend.engine import ZeravaneEngine
 
-# ── App ────────────────────────────────────────────────────────────────────────
+# ── App ─────────────────────────────────────────────────────────────[...]
 app = FastAPI(
     title="ZeravaneAI API",
     description="Programmatic access to ZeravaneAI — ScraperAPI web intelligence + Gemini 2.5 Flash RAG pipeline.",
     version="2.1.0",
 )
 
+# ── CORS Configuration (Security: Restrict to specific domains) ──────────────
+# Replace these with your actual Streamlit domain and development URLs
+ALLOWED_ORIGINS = [
+    "http://localhost:3000",              # Local development
+    "http://localhost:8501",              # Streamlit local
+    "https://localhost:8501",             # Streamlit local (HTTPS)
+    "http://127.0.0.1:8501",              # Streamlit local (loopback)
+    "https://your-streamlit-app.streamlit.app",  # TODO: Replace with your actual Streamlit domain
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=ALLOWED_ORIGINS,
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["Content-Type", "Authorization"],
+    allow_credentials=True,
+    max_age=3600,
 )
 
 _engine: ZeravaneEngine = None
@@ -80,7 +92,7 @@ class HealthResponse(BaseModel):
     model: str
 
 
-# ── Routes ─────────────────────────────────────────────────────────────────────
+# ── Routes ────────────────────────────────────────────────────────────[...]
 
 @app.get("/", tags=["Health"])
 def root():
