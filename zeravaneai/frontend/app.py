@@ -9,8 +9,11 @@ try:
 except ImportError:
     pass
 
-from dotenv import load_dotenv
-load_dotenv()
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    print("Warning: python-dotenv not installed. Skipping .env loading.")
 
 import re
 import streamlit as st
