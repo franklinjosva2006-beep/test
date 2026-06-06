@@ -38,7 +38,7 @@ ALLOWED_ORIGINS = [
     "http://localhost:8501",              # Streamlit local
     "https://localhost:8501",             # Streamlit local (HTTPS)
     "http://127.0.0.1:8501",              # Streamlit local (loopback)
-    "https://your-streamlit-app.streamlit.app",  # TODO: Replace with your actual Streamlit domain
+    "https://fbwscyhen7qrebxr7yjncc.streamlit.app",
 ]
 
 app.add_middleware(
