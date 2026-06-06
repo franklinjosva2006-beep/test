@@ -5,6 +5,8 @@ from bs4 import BeautifulSoup
 import chromadb
 from google import genai
 from google.genai import types
+import ipaddress
+from urllib.parse import urlparse
 
 # Try to load from .env, but don't fail if it's missing
 try:
@@ -27,9 +29,10 @@ class ZeravaneEngine:
     - GitHub repo analyzer — fetch README + file tree via GitHub API
     - Auto tech stack detection from live scraped content
     - Code generation from live documentation
+    - SSRF protection — blocks localhost, private IPs, non-http schemes
     """
 
-    SCRAPER_API_BASE = "http://api.scraperapi.com"
+    SCRAPER_API_BASE = "https://api.scraperapi.com"  # Fixed: HTTPS instead of HTTP
     MIN_TEXT_LENGTH = 100
 
     def __init__(self):
@@ -82,6 +85,44 @@ class ZeravaneEngine:
 
         return default
 
+    # ── SSRF Protection ────────────────────────────────────────────────────────
+
+    @staticmethod
+    def _is_safe_url(url: str) -> bool:
+        """
+        SSRF Protection: Block localhost, private IPs, and non-http/https schemes.
+        Returns: True if URL is safe to scrape, False otherwise.
+        """
+        try:
+            parsed = urlparse(url)
+            
+            # Only allow http and https schemes
+            if parsed.scheme not in ('http', 'https'):
+                return False
+            
+            # Extract hostname
+            hostname = parsed.hostname or parsed.netloc.split(':')[0]
+            
+            if not hostname:
+                return False
+            
+            # Block localhost and loopback
+            if hostname in ('localhost', '127.0.0.1', '::1', '0.0.0.0'):
+                return False
+            
+            # Block private IP ranges
+            try:
+                ip = ipaddress.ip_address(hostname)
+                if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved:
+                    return False
+            except ValueError:
+                # Not an IP address, likely a domain name - OK to proceed
+                pass
+            
+            return True
+        except Exception:
+            return False
+
     # ── Scraping tiers ──────────────────────────────────────────────────────
 
     def scrape_with_scraper_api(self, url: str) -> str:
@@ -89,6 +130,10 @@ class ZeravaneEngine:
         TIER 1: ScraperAPI.
         Handles JS rendering, rotating proxies, CAPTCHAs, and geo-unblocking.
         """
+        # SSRF Protection: Validate URL before scraping
+        if not self._is_safe_url(url):
+            return "Error: URL is not safe (localhost, private IP, or invalid scheme)"
+        
         try:
             params = {
                 "api_key": self.scraper_api_key,
@@ -122,6 +167,10 @@ class ZeravaneEngine:
         """
         TIER 2: Standard requests fallback (no proxy).
         """
+        # SSRF Protection: Validate URL before scraping
+        if not self._is_safe_url(url):
+            return "Error: URL is not safe (localhost, private IP, or invalid scheme)"
+        
         try:
             headers = {
                 "User-Agent": (
