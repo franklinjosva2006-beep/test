@@ -5,9 +5,13 @@ from bs4 import BeautifulSoup
 import chromadb
 from google import genai
 from google.genai import types
-from dotenv import load_dotenv
 
-load_dotenv()
+# Try to load from .env, but don't fail if it's missing
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
 
 
 class ZeravaneEngine:
@@ -29,20 +33,8 @@ class ZeravaneEngine:
     MIN_TEXT_LENGTH = 100
 
     def __init__(self, chroma_path="./chroma_db"):
-        # ── Gemini API key: Streamlit Cloud secrets → local .env fallback ──
-        try:
-            import streamlit as st
-            api_key = (
-                st.secrets.get("GEMINI_API_KEY")
-                or st.secrets.get("GOOGLE_API_KEY")
-                or os.environ.get("GEMINI_API_KEY")
-                or os.environ.get("GOOGLE_API_KEY")
-            )
-        except Exception:
-            api_key = (
-                os.environ.get("GEMINI_API_KEY")
-                or os.environ.get("GOOGLE_API_KEY")
-            )
+        # ── Get Gemini API key from Streamlit secrets or environment ──
+        api_key = self._get_secret("GEMINI_API_KEY") or self._get_secret("GOOGLE_API_KEY")
 
         if not api_key:
             raise ValueError(
@@ -54,41 +46,41 @@ class ZeravaneEngine:
         self.model_name = "gemini-2.5-flash"
         self.chroma_client = chromadb.PersistentClient(path=chroma_path)
 
-        # ── ScraperAPI credentials ──
-        try:
-            import streamlit as st
-            self.scraper_api_key = (
-                st.secrets.get("SCRAPER_API_KEY")
-                or os.environ.get("SCRAPER_API_KEY", "")
-            )
-        except Exception:
-            self.scraper_api_key = os.environ.get("SCRAPER_API_KEY", "")
-
+        # ── Get ScraperAPI credentials ──
+        self.scraper_api_key = self._get_secret("SCRAPER_API_KEY", default="")
         self.scraper_enabled = bool(self.scraper_api_key)
 
-        # ── Groq fallback credentials ──
-        try:
-            import streamlit as st
-            groq_key = (
-                st.secrets.get("GROQ_API_KEY")
-                or os.environ.get("GROQ_API_KEY", "")
-            )
-            aiml_key = (
-                st.secrets.get("AIML_API_KEY")
-                or os.environ.get("AIML_API_KEY", "")
-            )
-        except Exception:
-            groq_key = os.environ.get("GROQ_API_KEY", "")
-            aiml_key = os.environ.get("AIML_API_KEY", "")
-
-        self.groq_api_key = groq_key
-        self.aiml_api_key = aiml_key
-        self.groq_enabled = bool(groq_key)
-        self.aiml_enabled = bool(aiml_key)
+        # ── Get Groq and AI/ML API credentials ──
+        self.groq_api_key = self._get_secret("GROQ_API_KEY", default="")
+        self.aiml_api_key = self._get_secret("AIML_API_KEY", default="")
+        self.groq_enabled = bool(self.groq_api_key)
+        self.aiml_enabled = bool(self.aiml_api_key)
 
         # Session cache
         self._cached_url = None
         self._cached_collection = "zeravane_cache"
+
+    def _get_secret(self, key: str, default=None):
+        """
+        Get secret from multiple sources:
+        1. Streamlit secrets (if running in Streamlit)
+        2. Environment variables
+        3. Default value
+        """
+        # Try Streamlit secrets first
+        try:
+            import streamlit as st
+            if hasattr(st, 'secrets') and key in st.secrets:
+                return st.secrets[key]
+        except Exception:
+            pass
+
+        # Fall back to environment variables
+        value = os.environ.get(key)
+        if value:
+            return value
+
+        return default
 
     # ── Scraping tiers ──────────────────────────────────────────────────────
 
